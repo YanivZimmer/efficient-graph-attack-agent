@@ -1,0 +1,27 @@
+{
+  "dataset": "CIC-IDS 2017 / NetFlow variants",
+  "notes": "Published numbers are reference points from original papers on related but not identical splits/preprocessing. They are not reproduced by this repository.",
+  "references": [
+    {
+      "method": "gnn_ids",
+      "citation": "GNN-IDS: Graph Neural Networks for Intrusion Detection Systems (ARES 2024)",
+      "metric_source": "Paper reports strong performance on synthetic/public IDS-derived attack graphs; no single canonical CIC-IDS2017 AUC row.",
+      "node_f1": null,
+      "node_auc": null
+    },
+    {
+      "method": "graph_ids",
+      "citation": "Self-Supervised Learning of Graph Representations for Network Intrusion Detection (NeurIPS 2025)",
+      "metric_source": "NF-CSE-CIC-IDS2018-v3 macro-F1 / PR-AUC",
+      "node_f1": 0.9961,
+      "node_auc": 0.9998
+    },
+    {
+      "method": "anomal_e",
+      "citation": "Anomal-E: A Self-Supervised Network Intrusion Detection System based on Graph Neural Networks (2022)",
+      "metric_source": "Paper reports improved detection using learned embeddings vs raw features on NF-UNSW-NB15 and NF-BoT-IoT; no unified CIC-IDS2017 AUC.",
+      "node_f1": null,
+      "node_auc": null
+    }
+  ]
+}

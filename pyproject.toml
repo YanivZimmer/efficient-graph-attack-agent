@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "efficient-graph-attack-agent"
+version = "0.1.0"
+description = "Lightweight E-ACS graph sketching and agentic correlation prototype"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.25",
+  "pydantic>=2",
+  "pandas",
+  "numpy"
+]
+
+[project.optional-dependencies]
+neo4j = ["neo4j>=5"]
+secrl = ["huggingface-hub>=0.23"]
+telemetry = ["opentelemetry-api>=1"]
+gemini = ["google-genai>=1.0"]
+gnn = [
+  "torch>=2.2",
+  "torch-geometric>=2.5",
+  "scikit-learn>=1.4",
+]
+
+[project.scripts]
+gnn-incident = "gnn_entry:run_incident"
+gnn-benchmark = "gnn_entry:run_benchmark"
+gnn-benchmark-table = "gnn_entry:run_benchmark_table"
+gnn-baseline-compare = "gnn_entry:run_baseline_comparison"
+
+[dependency-groups]
+gnn = [
+  "torch>=2.2",
+  "torch-geometric>=2.5",
+  "scikit-learn>=1.4",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["gnn_entry"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

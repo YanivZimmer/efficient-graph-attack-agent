@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# GNN pipeline artifacts
+outputs/
+
+# Never commit dataset JSONL exports
+*.jsonl
