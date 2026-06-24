@@ -12,17 +12,19 @@ Security operations centers (SOCs) receive hundreds of alerts per shift, but ana
 
 **Our method (HGAT)** builds a **heterogeneous alert–entity graph** (alerts linked to hosts, users, processes, IPs) and trains a 2-layer **Heterogeneous Graph Transformer** (Hu et al., WWW 2020) to produce triage scores and 64-dimensional embeddings. Unlike classic GNN-IDS work on NetFlow classification, the target output is **incident discovery**, not single-alert detection alone.
 
-**Baselines** — simplified, runnable reimplementations of three published methods on the **same graph, split, and evaluator**:
+**Baselines** are grouped by **comparison tier** (see §3.0). Runnable locally:
 
-| Method | Style | Key reference |
-|--------|-------|---------------|
-| GNN-IDS | Supervised GraphSAGE | Sun et al., ARES 2024 |
-| GraphIDS | Self-supervised GraphSAGE + Transformer MAE | Guerra et al., NeurIPS 2025 |
-| Anomal-E | Self-supervised GraphSAGE + DGI contrastive | Caville et al., KBS 2022 |
+| Tier | Method | Style |
+|------|--------|-------|
+| Rule-based lower bound | GraphWeaver | Entity overlap + time window (no ML) |
+| Weakly supervised (ours) | HGAT | Heterogeneous GAT + DBSCAN |
+| Flow-level GNN (reimplemented) | GNN-IDS, GraphIDS, Anomal-E | NetFlow methods adapted to our alert graph |
 
-Fair side-by-side comparison: `uv run gnn-baseline-compare`. Published benchmark numbers in `literature_baselines.json` are **reference-only** (NetFlow datasets, different splits) — not reproduced here.
+**Supervised upper bounds** (GRAIN, Eckhoff GMN, CrossAlert) are documented as literature references only — they require incident-level ground truth we deliberately withhold at training time.
 
-**Datasets:** Primary evaluation uses a ~500-alert tenant JSONL (local, not in git). Loaders also exist for DARPA TC, ExCyTIn/SecRL, LANL cyber1, and CIC-IDS 2017 — the latter four support **incident-level ground-truth metrics** where labels exist.
+Fair side-by-side comparison: `uv run gnn-baseline-compare`. Flow-level published numbers in `literature_baselines.json` are **reference-only** (NetFlow datasets, different splits) — not head-to-head wins/losses.
+
+**Datasets:** Primary evaluation uses a ~500-alert tenant JSONL (local, not in git). Alert-domain benchmark loaders: **AIT-ADS**, **DARPA 2000**, **ISCX 2012**, plus DARPA TC, ExCyTIn/SecRL, LANL cyber1, and CIC-IDS 2017 (flow-level node classification).
 
 **Evaluation:** Node-level AUC/F1 on validation alerts; cluster proxy metrics (tactic coherence, time span) on primary data; cluster P/R/F1 where incident GT is available.
 
@@ -65,11 +67,55 @@ Hu, Z., Dong, Y., Wang, K., & Sun, Y. (2020). **Heterogeneous Graph Transformer.
 
 ---
 
-## 3. Literature baselines implemented
+## 3. Baselines and comparison framing
 
-All baselines share the **same graph, train/val split, DBSCAN, and evaluator** as HGAT for fair comparison (`benchmarks/run_baseline_comparison.py`).
+Peer review correctly notes that GraphIDS, Anomal-E, and GNN-IDS operate on **NetFlow-level homogeneous graphs** with self-supervised or flow-classification objectives. Reimplementing them on our SOC alert graph is a **controlled comparison**, not a claim to beat their published NetFlow numbers. We scope comparisons explicitly:
 
-### 3.1 GNN-IDS (`gnn_ids`)
+| Comparison type | Methods | Datasets |
+|---|---|---|
+| **Rule-based lower bound** (no learning) | GraphWeaver entity-overlap | All alert-domain datasets |
+| **Our method** (alert labels only) | HGAT + DBSCAN | All |
+| **Flow-level GNN** (different domain) | GNN-IDS, GraphIDS, Anomal-E | Primary + CIC-IDS 2017 |
+| **Supervised upper bound** (literature only) | GRAIN, Eckhoff GMN, CrossAlert | AIT-ADS, DARPA 2000, ISCX 2012 |
+
+**Paper framing:** *We compare against GRAIN and Eckhoff et al. as supervised upper bounds — methods that require incident-level ground truth we deliberately withhold — and GraphWeaver as a rule-based lower bound. Our method approaches supervised clustering quality without ever accessing incident labels at training time.*
+
+Tiers are encoded in `benchmarks/literature_baselines.json` and surfaced in comparison tables via the `comparison_tier` column.
+
+---
+
+## 3.1 GraphWeaver (`graphweaver`) — rule-based lower bound
+
+| Item | Detail |
+|------|--------|
+| **Implementation** | Union-find clustering: two alerts sharing host/user/process/IP within a configurable time window → same incident |
+| **Training** | None (deterministic) |
+| **Triage** | Default `oracle_label` (malicious alerts already in analyst queue); optional `severity` threshold via `--graphweaver-triage` |
+| **CLI** | Included in `uv run gnn-baseline-compare --methods graphweaver hgat ...` |
+
+**Reference:**  
+Freitas, R., & Gharib, I. (2024). **GraphWeaver: Scalable Alert Correlation With Dynamic Graphs.** *CIKM 2024*.  
+Industry lineage: Microsoft Defender XDR entity-overlap correlation.
+
+---
+
+## 3.2 Supervised upper bounds (literature reference only)
+
+These methods operate in our **alert-correlation domain** but require **incident-level or causal ground truth** at training time. They are not reimplemented here; rows in `literature_baselines.json` document their claims for honest positioning.
+
+| Method | Reference | Limitation vs our setting |
+|--------|-----------|---------------------------|
+| **GRAIN** | Xiao et al., *Computers & Security* 2025 | Requires attack-scenario GT + causality labels |
+| **Eckhoff GMN** | Eckhoff et al., 2025 | Requires labeled historical incidents |
+| **CrossAlert** | Niknami et al., IEEE CNS 2024 | Multi-stage alert analysis; no bundled implementation |
+
+---
+
+## 3.3 Flow-level GNN baselines (reimplemented on our alert graph)
+
+All trainable baselines below share the **same graph, train/val split, DBSCAN (except GraphWeaver), and evaluator** as HGAT (`benchmarks/run_baseline_comparison.py`).
+
+### GNN-IDS (`gnn_ids`)
 
 | Item | Detail |
 |------|--------|
@@ -85,7 +131,7 @@ Sun, Z., Teixeira, A. M. H., & Toor, S. (2024). **GNN-IDS: Graph Neural Network 
 
 ---
 
-### 3.2 GraphIDS (`graph_ids`)
+### 3.4 GraphIDS (`graph_ids`)
 
 | Item | Detail |
 |------|--------|
@@ -102,7 +148,7 @@ Guerra, L., Chapuis, T., Duc, G., Mozharovskyi, P., & Nguyen, V.-T. (2025). **Se
 
 ---
 
-### 3.3 Anomal-E (`anomal_e`)
+### 3.5 Anomal-E (`anomal_e`)
 
 | Item | Detail |
 |------|--------|
@@ -118,7 +164,7 @@ Caville, E., Lo, W. W., Layeghy, S., & Portmann, M. (2022). **Anomal-E: A Self-S
 
 ---
 
-### 3.4 Supporting component papers
+### 3.6 Supporting component papers
 
 | Component | Reference |
 |-----------|-----------|
@@ -142,7 +188,17 @@ Source: Edwards Lifesciences tenant backup (CrowdStrike-style alerts with MITRE,
 
 ---
 
-### 4.2 Benchmark datasets (loaders implemented)
+### 4.2 Alert-domain benchmark datasets (incident structure)
+
+| Dataset | Loader | Labels | Incident GT | Reference |
+|---------|--------|--------|-------------|-----------|
+| **AIT-ADS** | `data/loaders/ait_ads_loader.py` | Attack-step labels from Wazuh/AMiner/Suricata | Attack-step groupings | Landauer et al., CSET 2024; DOI [10.5281/zenodo.8263181](https://doi.org/10.5281/zenodo.8263181) |
+| **DARPA 2000 LLDOS** | `data/loaders/darpa2000_loader.py` | Snort alert signatures | 5-phase attack campaign | Classic multi-step alert benchmark (GRAIN eval set) |
+| **ISCX IDS 2012** | `data/loaders/iscx2012_loader.py` | Multi-step attack scenarios | Scenario groupings | UNB ISCX 2012; used by GRAIN and MAAC |
+
+Download AIT-ADS to `datasets/ait_ads/`, DARPA 2000 Snort exports to `datasets/darpa2000/`, ISCX alert CSVs to `datasets/iscx2012/`.
+
+### 4.3 Other benchmark datasets
 
 | Dataset | Loader | Node mapping | Labels | Incident GT for eval |
 |---------|--------|--------------|--------|----------------------|
@@ -250,11 +306,18 @@ uv run gnn-incident \
   --data datasets/0b1972fe_backup/training_data_rich_examples.jsonl \
   --output-dir outputs/gnn_incident
 
-# All methods side-by-side
+# All methods side-by-side (includes GraphWeaver lower bound)
 uv run gnn-baseline-compare \
   --dataset primary \
-  --methods hgat gnn_ids graph_ids anomal_e \
+  --methods graphweaver hgat gnn_ids graph_ids anomal_e \
   --epochs 50 \
+  --output-dir outputs/baseline_comparison
+
+# Alert-domain benchmark (after downloading AIT-ADS)
+uv run gnn-baseline-compare \
+  --dataset ait_ads \
+  --data-root datasets/ait_ads \
+  --methods graphweaver hgat \
   --output-dir outputs/baseline_comparison
 
 # LaTeX table
@@ -286,7 +349,9 @@ E-ACS SecRL baselines (high_severity_only, entity_time_cluster, graph_oracle, et
 - [x] Full HGAT pipeline (graph → train → cluster → evaluate)
 - [x] Schema-agnostic graph builder
 - [x] Benchmark loaders (primary, DARPA, ExCyTIn, LANL, CIC-IDS)
-- [x] Runnable baselines: GNN-IDS, GraphIDS, Anomal-E
+- [x] Runnable baselines: GraphWeaver, GNN-IDS, GraphIDS, Anomal-E
+- [x] Alert-domain loaders: AIT-ADS, DARPA 2000, ISCX 2012
+- [x] Comparison tiers + supervised upper-bound literature rows
 - [x] Side-by-side comparison runner + LaTeX/markdown tables
 - [x] uv entry points (`gnn-incident`, `gnn-baseline-compare`, etc.)
 - [x] Unit tests (`tests/test_gnn_pipeline.py`, `tests/test_gnn_baselines.py`)
@@ -294,7 +359,8 @@ E-ACS SecRL baselines (high_severity_only, entity_time_cluster, graph_oracle, et
 
 ### Not yet done
 
-- [ ] Full benchmark runs on downloaded DARPA / ExCyTIn / LANL / CIC-IDS data
+- [ ] Full benchmark runs on downloaded AIT-ADS / DARPA 2000 / ISCX 2012 data
+- [ ] Reimplement GRAIN / Eckhoff GMN as optional supervised upper-bound evaluators
 - [ ] Published comparison numbers reproduced on identical splits (literature rows are reference-only)
 - [ ] Incident GT evaluation on primary tenant (no labels available)
 - [ ] Hyperparameter search (DBSCAN eps, HGT heads, etc.)
@@ -345,6 +411,14 @@ E-ACS SecRL baselines (high_severity_only, entity_time_cluster, graph_oracle, et
   title     = {Toward Generating a New Intrusion Detection Dataset and Intrusion Traffic Characterization},
   booktitle = {ICISSp},
   year      = {2018}
+}
+
+@inproceedings{landauer2024aitads,
+  author    = {Landauer, Max and others},
+  title     = {Introducing a New Alert Data Set for Multi-Step Attack Analysis},
+  booktitle = {CSET},
+  year      = {2024},
+  doi       = {10.5281/zenodo.8263181}
 }
 ```
 
