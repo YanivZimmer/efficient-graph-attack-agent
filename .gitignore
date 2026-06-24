@@ -222,3 +222,8 @@ outputs/
 
 # Never commit dataset JSONL exports
 *.jsonl
+
+# Local E-ACS eval artifacts (keep on backup branch / disk only)
+reports/
+falcon_graph_alerts*.csv
+datasets/
