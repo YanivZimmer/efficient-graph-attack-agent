@@ -35,24 +35,17 @@ uv run gnn-benchmark --datasets primary --output-dir outputs/benchmarks
 uv run gnn-benchmark-table --summary outputs/benchmarks/benchmark_summary.json
 ```
 
-Compare HGAT against baselines on the same split. Methods are tiered (see `docs/GNN_research_summary.md`):
-
-- **GraphWeaver** — rule-based entity-overlap lower bound (no ML)
-- **HGAT** — our weakly-supervised method
-- **GNN-IDS / GraphIDS / Anomal-E** — flow-level GNN methods reimplemented on our alert graph
+Compare HGAT against all baselines on the same split:
 
 ```bash
 uv run gnn-baseline-compare \
-  --dataset primary \
-  --methods graphweaver hgat gnn_ids graph_ids anomal_e \
+  --datasets primary ait_ads darpa2000 iscx2012 \
+  --methods graphweaver hgat gnn_ids graph_ids anomal_e grain eckhoff_gmn crossalert \
   --epochs 50 \
   --output-dir outputs/baseline_comparison
+```
 
-# Alert-domain benchmark (after downloading AIT-ADS to datasets/ait_ads/)
-uv run gnn-baseline-compare \
-  --dataset ait_ads \
-  --methods graphweaver hgat \
-  --output-dir outputs/baseline_comparison
+Supervised upper bounds (`grain`, `eckhoff_gmn`, `crossalert`) auto-skip when a dataset has no incident ground truth. Combined results: `outputs/baseline_comparison/all_datasets_baseline_comparison.json`.
 
 uv run gnn-benchmark-table \
   --summary outputs/baseline_comparison/primary_baseline_comparison.json

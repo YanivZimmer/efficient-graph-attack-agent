@@ -6,28 +6,15 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Callable
 
+from benchmarks.dataset_registry import DATASET_LOADERS, load_dataset
 from clustering.incident_clusterer import cluster_incidents
 from data.graph_builder import AlertGraphArtifacts
-from data.loaders.cicids_loader import load_cicids_graph
-from data.loaders.darpa_tc_loader import load_darpa_tc_graph
-from data.loaders.excytin_loader import load_excytin_graph
-from data.loaders.lanl_loader import load_lanl_graph
-from data.loaders.primary_loader import load_primary_graph
 from evaluation.evaluator import evaluate_run
 from training.trainer import train_model
 
 
 logger = logging.getLogger(__name__)
-
-DATASET_LOADERS: dict[str, Callable[..., AlertGraphArtifacts]] = {
-    "primary": load_primary_graph,
-    "darpa_tc": load_darpa_tc_graph,
-    "excytin": load_excytin_graph,
-    "lanl": load_lanl_graph,
-    "cicids": load_cicids_graph,
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,17 +36,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _resolve_dataset_path(dataset: str, data_root: Path) -> Path:
-    if dataset == "primary":
-        return data_root / "0b1972fe_backup" / "training_data_rich_examples.jsonl"
-    return data_root / dataset
-
-
 def _load_dataset(dataset: str, data_root: Path, lanl_sample_days: int) -> AlertGraphArtifacts:
-    path = _resolve_dataset_path(dataset, data_root)
-    if dataset == "lanl":
-        return load_lanl_graph(path, sample_days=lanl_sample_days)
-    return DATASET_LOADERS[dataset](path)
+    return load_dataset(dataset, data_root, lanl_sample_days=lanl_sample_days)
 
 
 def run_benchmark(

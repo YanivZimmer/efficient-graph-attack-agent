@@ -9,20 +9,30 @@ from models.baselines.anomal_e import AnomalE
 from models.baselines.gnn_ids import GNNIDS
 from models.baselines.graph_ids import GraphIDS
 from models.baselines.graph_utils import build_alert_homogeneous_graph
-from models.baselines.registry import BASELINE_MODELS, build_model
+from models.baselines.registry import BASELINE_MODELS, NON_TRAINABLE_METHODS, SUPERVISED_UPPER_BOUND_METHODS, build_model
 from tests.test_gnn_pipeline import SAMPLE_RECORDS
 from training.baseline_trainer import train_baseline
+from training.supervised_baseline_trainer import train_supervised_baseline
 
 
 class GNNBaselineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.artifacts = build_graph_from_records(SAMPLE_RECORDS)
 
-    def test_registry_contains_literature_baselines(self) -> None:
-        self.assertIn("hgat", BASELINE_MODELS)
-        self.assertIn("gnn_ids", BASELINE_MODELS)
-        self.assertIn("graph_ids", BASELINE_MODELS)
-        self.assertIn("anomal_e", BASELINE_MODELS)
+    def test_registry_contains_all_baselines(self) -> None:
+        for method in (
+            "graphweaver",
+            "hgat",
+            "gnn_ids",
+            "graph_ids",
+            "anomal_e",
+            "grain",
+            "eckhoff_gmn",
+            "crossalert",
+        ):
+            self.assertIn(method, BASELINE_MODELS)
+        self.assertIn("graphweaver", NON_TRAINABLE_METHODS)
+        self.assertIn("grain", SUPERVISED_UPPER_BOUND_METHODS)
 
     def test_homogeneous_projection_has_edges(self) -> None:
         homo = build_alert_homogeneous_graph(self.artifacts.data)
@@ -49,6 +59,15 @@ class GNNBaselineTests(unittest.TestCase):
     def test_train_anomal_e_baseline(self) -> None:
         result = train_baseline("anomal_e", self.artifacts, epochs=2, pretrain_epochs=2)
         self.assertEqual(result.probabilities.shape[0], len(SAMPLE_RECORDS))
+
+    def test_train_grain_supervised_baseline(self) -> None:
+        artifacts = build_graph_from_records(
+            SAMPLE_RECORDS,
+            ground_truth_incidents={"incident-a": ["a1", "a2"], "incident-b": ["a4", "a5"]},
+        )
+        result = train_supervised_baseline("grain", artifacts, epochs=2)
+        self.assertEqual(result.predictions.shape[0], len(SAMPLE_RECORDS))
+        self.assertEqual(result.embeddings.shape[0], len(SAMPLE_RECORDS))
 
 
 if __name__ == "__main__":

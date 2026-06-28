@@ -99,15 +99,19 @@ Industry lineage: Microsoft Defender XDR entity-overlap correlation.
 
 ---
 
-## 3.2 Supervised upper bounds (literature reference only)
+## 3.2 Supervised upper bounds (GRAIN, Eckhoff GMN, CrossAlert)
 
-These methods operate in our **alert-correlation domain** but require **incident-level or causal ground truth** at training time. They are not reimplemented here; rows in `literature_baselines.json` document their claims for honest positioning.
+These methods operate in the **alert-correlation domain** but require **incident-level or attack-step ground truth** at training time — unlike HGAT, which uses alert-level labels only. Local implementations are **simplified supervised upper bounds**; they auto-skip on datasets without incident GT (e.g. primary tenant JSONL).
 
-| Method | Reference | Limitation vs our setting |
-|--------|-----------|---------------------------|
-| **GRAIN** | Xiao et al., *Computers & Security* 2025 | Requires attack-scenario GT + causality labels |
-| **Eckhoff GMN** | Eckhoff et al., 2025 | Requires labeled historical incidents |
-| **CrossAlert** | Niknami et al., IEEE CNS 2024 | Multi-stage alert analysis; no bundled implementation |
+| Method | CLI | Implementation summary | Reference |
+|--------|-----|------------------------|-----------|
+| **GRAIN** | `grain` | Causal alert graph (entity + temporal edges) + GraphSAGE + incident CE loss | Xiao et al., *Computers & Security* 2025 |
+| **Eckhoff GMN** | `eckhoff_gmn` | Alert encoder + incident prototype matching (graph-matching simplified) | Eckhoff et al., 2025 |
+| **CrossAlert** | `crossalert` | Alert feature fusion + IsolationForest anomaly scores + agglomerative clustering | Niknami et al., IEEE CNS 2024 |
+
+**Comparison claim:** *GRAIN requires incident-level supervision; we match its clustering quality using only alert-level labels (HGAT).*
+
+Evaluated on alert-domain datasets: **AIT-ADS**, **DARPA 2000**, **ISCX 2012** (also DARPA TC, ExCyTIn, LANL where incident GT exists).
 
 ---
 
@@ -306,19 +310,12 @@ uv run gnn-incident \
   --data datasets/0b1972fe_backup/training_data_rich_examples.jsonl \
   --output-dir outputs/gnn_incident
 
-# All methods side-by-side (includes GraphWeaver lower bound)
+# All baselines × all alert-domain datasets (supervised methods skip on primary)
 uv run gnn-baseline-compare \
-  --dataset primary \
-  --methods graphweaver hgat gnn_ids graph_ids anomal_e \
+  --datasets primary ait_ads darpa2000 darpa_tc excytin iscx2012 lanl cicids \
+  --methods graphweaver hgat gnn_ids graph_ids anomal_e grain eckhoff_gmn crossalert \
   --epochs 50 \
-  --output-dir outputs/baseline_comparison
-
-# Alert-domain benchmark (after downloading AIT-ADS)
-uv run gnn-baseline-compare \
-  --dataset ait_ads \
-  --data-root datasets/ait_ads \
-  --methods graphweaver hgat \
-  --output-dir outputs/baseline_comparison
+  --output-dir outputs/baseline_comparison_full
 
 # LaTeX table
 uv run gnn-benchmark-table \

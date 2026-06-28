@@ -1,25 +1,95 @@
 {
-  "dataset": "CIC-IDS 2017 / NetFlow variants",
-  "notes": "Published numbers are reference points from original papers on related but not identical splits/preprocessing. They are not reproduced by this repository.",
+  "notes": "Published numbers are reference points from original papers on related but not identical splits/preprocessing. Runnable local implementations of GRAIN, Eckhoff GMN, and CrossAlert are simplified supervised upper bounds that require incident ground truth.",
+  "comparison_tiers": {
+    "rule_based_lower_bound": {
+      "description": "Deterministic alert correlation without learned models.",
+      "methods": ["graphweaver"]
+    },
+    "weakly_supervised": {
+      "description": "Alert-level labels only; no incident-level supervision at training time.",
+      "methods": ["hgat"]
+    },
+    "flow_level_gnn": {
+      "description": "NetFlow-oriented GNN-IDS methods reimplemented on our alert graph.",
+      "methods": ["gnn_ids", "graph_ids", "anomal_e"]
+    },
+    "supervised_upper_bound": {
+      "description": "Alert-correlation methods requiring incident or attack-step ground truth at training time.",
+      "methods": ["grain", "eckhoff_gmn", "crossalert"]
+    }
+  },
+  "domain_datasets": [
+    {
+      "name": "ait_ads",
+      "citation": "Landauer et al., CSET 2024 — AIT Alert Data Set",
+      "doi": "10.5281/zenodo.8263181",
+      "url": "https://github.com/ait-aecid/alert-data-set"
+    },
+    {
+      "name": "darpa2000",
+      "citation": "DARPA 2000 LLDOS 1.0/2.0 Snort alert scenarios (five-phase multi-step attack)"
+    },
+    {
+      "name": "iscx2012",
+      "citation": "UNB ISCX IDS 2012 multi-step attack scenarios (day-3 alert correlation standard)"
+    }
+  ],
   "references": [
     {
+      "method": "graphweaver",
+      "comparison_tier": "rule_based_lower_bound",
+      "citation": "Freitas & Gharib (2024). GraphWeaver: Scalable Alert Correlation With Dynamic Graphs. CIKM 2024.",
+      "metric_source": "Industry rule-based entity-overlap correlation (Microsoft Defender XDR lineage).",
+      "node_f1": null,
+      "node_auc": null
+    },
+    {
+      "method": "grain",
+      "comparison_tier": "supervised_upper_bound",
+      "citation": "Xiao et al. (2025). GRAIN: Graph-based Alert Incident coNstruction. Computers & Security.",
+      "metric_source": "Full GRAIN uses causality discovery + RL screening; local run is simplified causal-graph GNN with incident CE loss. Requires attack-step/incident GT.",
+      "node_f1": null,
+      "node_auc": null,
+      "cluster_f1": null
+    },
+    {
+      "method": "eckhoff_gmn",
+      "comparison_tier": "supervised_upper_bound",
+      "citation": "Eckhoff et al. (2025). Alert contextualisation with Graph Matching Networks.",
+      "metric_source": "Full method matches alert groups to labeled historical incidents; local run uses incident prototype matching. Requires incident GT.",
+      "node_f1": null,
+      "node_auc": null,
+      "cluster_f1": null
+    },
+    {
+      "method": "crossalert",
+      "comparison_tier": "supervised_upper_bound",
+      "citation": "Niknami et al. (2024). CrossAlert: Multi-stage network attack detection via alert analysis. IEEE CNS 2024.",
+      "metric_source": "Local run fuses alert features, anomaly scores, and agglomerative clustering; uses incident GT when available.",
+      "node_f1": null,
+      "node_auc": null
+    },
+    {
       "method": "gnn_ids",
-      "citation": "GNN-IDS: Graph Neural Networks for Intrusion Detection Systems (ARES 2024)",
-      "metric_source": "Paper reports strong performance on synthetic/public IDS-derived attack graphs; no single canonical CIC-IDS2017 AUC row.",
+      "comparison_tier": "flow_level_gnn",
+      "citation": "Sun et al. (2024). GNN-IDS: Graph Neural Network based Intrusion Detection System. ARES 2024.",
+      "metric_source": "Reimplemented on our alert graph; original paper uses IDS-derived attack graphs.",
       "node_f1": null,
       "node_auc": null
     },
     {
       "method": "graph_ids",
-      "citation": "Self-Supervised Learning of Graph Representations for Network Intrusion Detection (NeurIPS 2025)",
-      "metric_source": "NF-CSE-CIC-IDS2018-v3 macro-F1 / PR-AUC",
+      "comparison_tier": "flow_level_gnn",
+      "citation": "Guerra et al. (2025). Self-Supervised Learning of Graph Representations for Network Intrusion Detection. NeurIPS 2025.",
+      "metric_source": "NF-CSE-CIC-IDS2018-v3 macro-F1 / PR-AUC (published NetFlow benchmark, not reproduced here).",
       "node_f1": 0.9961,
       "node_auc": 0.9998
     },
     {
       "method": "anomal_e",
-      "citation": "Anomal-E: A Self-Supervised Network Intrusion Detection System based on Graph Neural Networks (2022)",
-      "metric_source": "Paper reports improved detection using learned embeddings vs raw features on NF-UNSW-NB15 and NF-BoT-IoT; no unified CIC-IDS2017 AUC.",
+      "comparison_tier": "flow_level_gnn",
+      "citation": "Caville et al. (2022). Anomal-E: A Self-Supervised Network Intrusion Detection System based on Graph Neural Networks. KBS.",
+      "metric_source": "NF-UNSW-NB15 / NF-BoT-IoT (published NetFlow benchmark, not reproduced here).",
       "node_f1": null,
       "node_auc": null
     }

@@ -17,7 +17,7 @@ from torch.nn.functional import sigmoid
 from data.graph_builder import AlertGraphArtifacts
 from models.baselines.anomal_e import AnomalE
 from models.baselines.graph_ids import GraphIDS
-from models.baselines.registry import BASELINE_MODELS, build_model
+from models.baselines.registry import WEAKLY_SUPERVISED_METHODS, build_model
 
 
 logger = logging.getLogger(__name__)
@@ -86,8 +86,11 @@ def train_baseline(
     device: str | None = None,
 ) -> BaselineTrainingResult:
     """Train a registered baseline model with the appropriate objective."""
-    if model_name not in BASELINE_MODELS:
-        raise KeyError(f"Unknown model {model_name!r}")
+    if model_name not in WEAKLY_SUPERVISED_METHODS:
+        raise KeyError(
+            f"Unknown weakly-supervised model {model_name!r}. "
+            f"Expected one of {sorted(WEAKLY_SUPERVISED_METHODS)}"
+        )
 
     resolved_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     data = artifacts.data.to(resolved_device)
