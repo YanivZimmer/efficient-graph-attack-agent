@@ -220,6 +220,20 @@ __marimo__/
 # GNN pipeline artifacts
 outputs/
 
+# Research experiment artifacts and generated data
+experiments/**/results/
+*.csv
+*.npy
+*.pt
+*.pth
+*.ckpt
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.db
+*.sqlite
+
 # Never commit dataset JSONL exports
 *.jsonl
 

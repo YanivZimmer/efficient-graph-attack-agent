@@ -24,9 +24,17 @@ def cluster_incidents(
     threshold: float = 0.5,
     eps: float = 0.3,
     min_samples: int = 2,
+    selection_mode: str = "or",
 ) -> list[dict[str, object]]:
     """Cluster malicious-predicted alerts and write incident groups to JSONL."""
-    malicious_indices = np.where((probabilities >= threshold) | (predictions == 1))[0]
+    if selection_mode == "or":
+        malicious_indices = np.where((probabilities >= threshold) | (predictions == 1))[0]
+    elif selection_mode == "probability":
+        malicious_indices = np.where(probabilities >= threshold)[0]
+    elif selection_mode == "prediction":
+        malicious_indices = np.where(predictions == 1)[0]
+    else:
+        raise ValueError(f"Unknown selection_mode {selection_mode!r}")
     if len(malicious_indices) == 0:
         logger.warning("No malicious-predicted alerts found for clustering")
         clusters = [{"incident_id": -1, "alert_ids": []}]

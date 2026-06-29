@@ -207,6 +207,18 @@ class GNNPipelineTests(unittest.TestCase):
         self.assertTrue(hasattr(artifacts.data["alert"], "train_mask"))
         self.assertIn(("alert", "connects_to", "host"), artifacts.data.edge_types)
 
+    def test_graph_builder_can_add_alert_alert_edges(self) -> None:
+        artifacts = build_graph_from_records(
+            SAMPLE_RECORDS,
+            include_alert_alert_edges=True,
+            alert_link_hours=48.0,
+            max_alert_neighbors_per_relation=4,
+        )
+        self.assertIn(("alert", "same_host", "alert"), artifacts.data.edge_types)
+        self.assertIn(("alert", "precedes", "alert"), artifacts.data.edge_types)
+        self.assertGreater(artifacts.data["alert", "same_host", "alert"].edge_index.size(1), 0)
+        self.assertGreater(artifacts.data["alert", "precedes", "alert"].edge_index.size(1), 0)
+
     def test_primary_loader_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "sample.jsonl"

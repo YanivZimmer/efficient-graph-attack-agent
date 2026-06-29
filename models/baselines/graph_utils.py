@@ -92,3 +92,118 @@ def build_causal_alert_graph(
     if edge_pairs:
         homo.edge_index = torch.tensor(sorted(edge_pairs), dtype=torch.long).t().contiguous()
     return homo
+
+
+def _epoch_key(record: AlertRecord, index: int) -> tuple[float, int]:
+    if record.timestamp is None:
+        return (float("-inf"), index)
+    return (record.timestamp.timestamp(), index)
+
+
+def build_sparse_causal_alert_graph(
+    data: HeteroData,
+    alert_records: list[AlertRecord],
+    *,
+    max_gap_hours: float = 6.0,
+    max_neighbors_per_alert: int = 8,
+) -> Data:
+    """Build a sparse directed alert graph from shared entities and temporal precedence."""
+    homo = Data(
+        x=data["alert"].x,
+        y=data["alert"].y,
+        train_mask=data["alert"].train_mask,
+        val_mask=data["alert"].val_mask,
+    )
+    homo.num_nodes = int(data["alert"].x.size(0))
+
+    entity_to_alerts: dict[str, list[int]] = defaultdict(list)
+    for index, record in enumerate(alert_records):
+        for entity_type, value in record.entities.items():
+            if value:
+                entity_to_alerts[f"{entity_type}:{value}"].append(index)
+
+    max_gap_seconds = max_gap_hours * 3600.0
+    edge_pairs: set[tuple[int, int]] = set()
+    for alert_indices in entity_to_alerts.values():
+        if len(alert_indices) < 2:
+            continue
+        ordered = sorted(alert_indices, key=lambda idx: _epoch_key(alert_records[idx], idx))
+        for offset, left_index in enumerate(ordered):
+            left_record = alert_records[left_index]
+            if left_record.timestamp is None:
+                continue
+            neighbor_count = 0
+            for right_index in ordered[offset + 1 :]:
+                right_record = alert_records[right_index]
+                if right_record.timestamp is None:
+                    continue
+                gap_seconds = (right_record.timestamp - left_record.timestamp).total_seconds()
+                if gap_seconds <= 0:
+                    continue
+                if gap_seconds > max_gap_seconds:
+                    break
+                edge_pairs.add((left_index, right_index))
+                neighbor_count += 1
+                if neighbor_count >= max_neighbors_per_alert:
+                    break
+
+    if edge_pairs:
+        homo.edge_index = torch.tensor(sorted(edge_pairs), dtype=torch.long).t().contiguous()
+    else:
+        homo.edge_index = torch.empty((2, 0), dtype=torch.long)
+    return homo
+
+
+def build_semantic_alert_graph(
+    data: HeteroData,
+    alert_records: list[AlertRecord],
+    *,
+    max_gap_hours: float = 24.0,
+    max_neighbors_per_alert: int = 8,
+) -> Data:
+    """Build a sparse alert graph from shared tactic/technique neighborhoods."""
+    homo = Data(
+        x=data["alert"].x,
+        y=data["alert"].y,
+        train_mask=data["alert"].train_mask,
+        val_mask=data["alert"].val_mask,
+    )
+    homo.num_nodes = int(data["alert"].x.size(0))
+
+    semantic_buckets: dict[str, list[int]] = defaultdict(list)
+    for index, record in enumerate(alert_records):
+        semantic_buckets[f"tactic:{record.tactic}"].append(index)
+        semantic_buckets[f"technique:{record.technique}"].append(index)
+
+    max_gap_seconds = max_gap_hours * 3600.0
+    edge_pairs: set[tuple[int, int]] = set()
+    for alert_indices in semantic_buckets.values():
+        if len(alert_indices) < 2:
+            continue
+        ordered = sorted(alert_indices, key=lambda idx: _epoch_key(alert_records[idx], idx))
+        for offset, left_index in enumerate(ordered):
+            left_record = alert_records[left_index]
+            neighbor_count = 0
+            for right_index in ordered[offset + 1 :]:
+                right_record = alert_records[right_index]
+                if left_record.timestamp is not None and right_record.timestamp is not None:
+                    gap_seconds = abs((right_record.timestamp - left_record.timestamp).total_seconds())
+                    if gap_seconds > max_gap_seconds:
+                        break
+                edge_pairs.add((left_index, right_index))
+                edge_pairs.add((right_index, left_index))
+                neighbor_count += 1
+                if neighbor_count >= max_neighbors_per_alert:
+                    break
+
+    if not edge_pairs and homo.num_nodes > 1:
+        for index in range(homo.num_nodes - 1):
+            edge_pairs.add((index, index + 1))
+            edge_pairs.add((index + 1, index))
+
+    homo.edge_index = (
+        torch.tensor(sorted(edge_pairs), dtype=torch.long).t().contiguous()
+        if edge_pairs
+        else torch.empty((2, 0), dtype=torch.long)
+    )
+    return homo

@@ -245,7 +245,14 @@ def _strip_internal_fields(records: list[dict]) -> list[dict]:
     return cleaned
 
 
-def load_ait_ads_graph(data_root: Path, *, max_records: int = DEFAULT_MAX_RECORDS) -> AlertGraphArtifacts:
+def load_ait_ads_graph(
+    data_root: Path,
+    *,
+    max_records: int = DEFAULT_MAX_RECORDS,
+    include_alert_alert_edges: bool = False,
+    alert_link_hours: float = 6.0,
+    max_alert_neighbors_per_relation: int = 8,
+) -> AlertGraphArtifacts:
     """Load AIT-ADS alert JSON/NDJSON exports into graph artifacts."""
     _require_data_root(data_root)
     json_files = sorted(path for path in data_root.glob("*.json") if path.name != "package.json")
@@ -270,4 +277,10 @@ def load_ait_ads_graph(data_root: Path, *, max_records: int = DEFAULT_MAX_RECORD
 
     records = _subsample_records(records, max_records=max_records, random_state=42)
     ground_truth = _build_ground_truth(records)
-    return build_graph_from_records(_strip_internal_fields(records), ground_truth_incidents=ground_truth)
+    return build_graph_from_records(
+        _strip_internal_fields(records),
+        ground_truth_incidents=ground_truth,
+        include_alert_alert_edges=include_alert_alert_edges,
+        alert_link_hours=alert_link_hours,
+        max_alert_neighbors_per_relation=max_alert_neighbors_per_relation,
+    )

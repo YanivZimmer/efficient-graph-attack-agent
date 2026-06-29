@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -26,6 +27,12 @@ from data.schema import (
 NODE_TYPES = ("alert", "host", "user", "process", "ip")
 EDGE_REL = "connects_to"
 REV_EDGE_REL = "rev_connects_to"
+ALERT_ALERT_EDGE_TYPES = {
+    "host": "same_host",
+    "user": "same_user",
+    "process": "same_process",
+    "ip": "same_ip",
+}
 
 
 class AlertRecord(BaseModel):
@@ -162,6 +169,138 @@ def _build_edge_index(
     return torch.tensor([source_indices, target_indices], dtype=torch.long)
 
 
+def _seconds_since_epoch(timestamp: datetime | None) -> float:
+    if timestamp is None:
+        return float("-inf")
+    return timestamp.timestamp()
+
+
+def _append_temporal_local_edges(
+    grouped_alerts: dict[str, list[int]],
+    records: list[AlertRecord],
+    *,
+    relation: str,
+    max_gap_hours: float,
+    max_neighbors_per_alert: int,
+    edge_pairs: dict[tuple[str, str, str], tuple[list[int], list[int]]],
+) -> None:
+    """Add sparse local alert-alert edges for alerts sharing an entity."""
+    if max_neighbors_per_alert <= 0:
+        return
+
+    forward = ("alert", relation, "alert")
+    sources, targets = edge_pairs.setdefault(forward, ([], []))
+    max_gap_seconds = max_gap_hours * 3600.0
+
+    for alert_indices in grouped_alerts.values():
+        if len(alert_indices) < 2:
+            continue
+        ordered = sorted(
+            alert_indices,
+            key=lambda index: (_seconds_since_epoch(records[index].timestamp), index),
+        )
+        for offset, left_index in enumerate(ordered):
+            left_timestamp = records[left_index].timestamp
+            neighbor_count = 0
+            for right_index in ordered[offset + 1 :]:
+                right_timestamp = records[right_index].timestamp
+                if left_timestamp is not None and right_timestamp is not None:
+                    gap_seconds = (right_timestamp - left_timestamp).total_seconds()
+                    if gap_seconds > max_gap_seconds:
+                        break
+                sources.extend((left_index, right_index))
+                targets.extend((right_index, left_index))
+                neighbor_count += 1
+                if neighbor_count >= max_neighbors_per_alert:
+                    break
+
+
+def _append_precedes_edges(
+    records: list[AlertRecord],
+    *,
+    max_gap_hours: float,
+    max_neighbors_per_alert: int,
+    edge_pairs: dict[tuple[str, str, str], tuple[list[int], list[int]]],
+) -> None:
+    """Add directed temporal precedence edges for entity-sharing alerts."""
+    if max_neighbors_per_alert <= 0:
+        return
+
+    entity_to_alerts: dict[str, list[int]] = defaultdict(list)
+    for index, record in enumerate(records):
+        for entity_type, value in record.entities.items():
+            entity_to_alerts[f"{entity_type}:{value}"].append(index)
+
+    grouped_targets: dict[int, set[int]] = defaultdict(set)
+    max_gap_seconds = max_gap_hours * 3600.0
+    for alert_indices in entity_to_alerts.values():
+        if len(alert_indices) < 2:
+            continue
+        ordered = sorted(
+            alert_indices,
+            key=lambda index: (_seconds_since_epoch(records[index].timestamp), index),
+        )
+        for offset, left_index in enumerate(ordered):
+            left_timestamp = records[left_index].timestamp
+            if left_timestamp is None:
+                continue
+            neighbor_count = 0
+            for right_index in ordered[offset + 1 :]:
+                right_timestamp = records[right_index].timestamp
+                if right_timestamp is None:
+                    continue
+                gap_seconds = (right_timestamp - left_timestamp).total_seconds()
+                if gap_seconds <= 0:
+                    continue
+                if gap_seconds > max_gap_seconds:
+                    break
+                grouped_targets[left_index].add(right_index)
+                neighbor_count += 1
+                if neighbor_count >= max_neighbors_per_alert:
+                    break
+
+    forward = ("alert", "precedes", "alert")
+    sources, targets = edge_pairs.setdefault(forward, ([], []))
+    for source_index, target_indices in grouped_targets.items():
+        for target_index in sorted(target_indices):
+            sources.append(source_index)
+            targets.append(target_index)
+
+
+def _append_alert_alert_edges(
+    records: list[AlertRecord],
+    *,
+    max_link_hours: float,
+    max_neighbors_per_alert: int,
+    edge_pairs: dict[tuple[str, str, str], tuple[list[int], list[int]]],
+) -> None:
+    """Add sparse typed alert-alert edges for local temporal continuity."""
+    by_entity_type: dict[str, dict[str, list[int]]] = {
+        entity_type: defaultdict(list) for entity_type in ALERT_ALERT_EDGE_TYPES
+    }
+    for index, record in enumerate(records):
+        for entity_type, value in record.entities.items():
+            if entity_type in by_entity_type:
+                by_entity_type[entity_type][value].append(index)
+
+    for entity_type, relation in ALERT_ALERT_EDGE_TYPES.items():
+        _append_temporal_local_edges(
+            by_entity_type[entity_type],
+            records,
+            relation=relation,
+            max_gap_hours=max_link_hours,
+            max_neighbors_per_alert=max_neighbors_per_alert,
+            edge_pairs=edge_pairs,
+        )
+
+    _append_precedes_edges(
+        records,
+        max_gap_hours=max_link_hours,
+        max_neighbors_per_alert=max_neighbors_per_alert,
+        edge_pairs=edge_pairs,
+    )
+
+
 def build_graph_from_records(
     records: list[dict[str, Any]],
     *,
@@ -169,6 +308,9 @@ def build_graph_from_records(
     val_size: float = 0.2,
     random_state: int = 42,
     ground_truth_incidents: dict[str, list[str]] | None = None,
+    include_alert_alert_edges: bool = False,
+    alert_link_hours: float = 6.0,
+    max_alert_neighbors_per_relation: int = 8,
 ) -> AlertGraphArtifacts:
     """Build a heterogeneous alert graph from raw JSON records."""
     normalized, resolved_schema = normalize_records(records, schema=schema)
@@ -208,6 +350,14 @@ def build_graph_from_records(
             edge_pairs.setdefault(forward, ([], []))[1].append(entity_index)
             edge_pairs.setdefault(reverse, ([], []))[0].append(entity_index)
             edge_pairs.setdefault(reverse, ([], []))[1].append(alert_index)
+
+    if include_alert_alert_edges:
+        _append_alert_alert_edges(
+            normalized,
+            max_link_hours=alert_link_hours,
+            max_neighbors_per_alert=max_alert_neighbors_per_relation,
+            edge_pairs=edge_pairs,
+        )
 
     for edge_type, (sources, targets) in edge_pairs.items():
         data[edge_type].edge_index = _build_edge_index(sources, targets)

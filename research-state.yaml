@@ -1,0 +1,174 @@
+# Research State — Central Project Tracking
+# Initialized from the autoresearch skill templates and the current repo state.
+
+project:
+  title: "Weakly Supervised GNN Incident Discovery for SOC Alert Graphs"
+  question: "Can weakly supervised alert-entity graph models discover coherent security incidents from alert-level labels alone, and close the gap to rule-based and incident-supervised baselines?"
+  status: active
+  started: "2026-06-29"
+  domain: "cybersecurity ML / incident discovery"
+
+literature:
+  key_papers:
+    - id: "freitas2024graphweaver"
+      title: "GraphWeaver: Billion-Scale Cybersecurity Incident Correlation"
+      authors: "Freitas and Gharib"
+      year: 2024
+      relevance: "Industry alert-correlation lower bound built around graph-based incident correlation."
+    - id: "hu2020hgt"
+      title: "Heterogeneous Graph Transformer"
+      authors: "Hu et al."
+      year: 2020
+      relevance: "Backbone architecture for heterogeneous node/edge-type message passing."
+    - id: "hamilton2017graphsage"
+      title: "Inductive Representation Learning on Large Graphs"
+      authors: "Hamilton, Ying, and Leskovec"
+      year: 2017
+      relevance: "GraphSAGE backbone used by several repo baselines, including the local GRAIN-style implementation."
+    - id: "scargle2013bayesianblocks"
+      title: "The Bayesian Block Algorithm"
+      authors: "Scargle, Norris, Jackson, and Chiang"
+      year: 2013
+      relevance: "Fresh event-stream segmentation baseline; local experiments show raw rate-change blocks over-fragment incident-level alert groups."
+    - id: "wang2024cordgt"
+      title: "Dynamic Graph Transformer with Correlated Spatial-Temporal Positional Encoding"
+      authors: "Wang et al."
+      year: 2024
+      relevance: "Supports explicit spatial-temporal encodings for evolving graphs as a future model-side direction."
+    - id: "kulatilleke2022scgc"
+      title: "SCGC: Self-Supervised Contrastive Graph Clustering"
+      authors: "Kulatilleke, Portmann, and Chandra"
+      year: 2022
+      relevance: "Supports cluster-oriented contrastive objectives as an alternative to pure node classification."
+  open_problems:
+    - "Weakly supervised models can achieve strong node classification while still failing incident construction unless the temporal episode scale is modeled."
+    - "Primary-dataset weakly supervised runs are unstable across reruns, which blocks strong claims."
+    - "Current DBSCAN post-processing often merges too many malicious alerts into one giant incident; the best AIT-ADS result no longer needs DBSCAN after candidate selection."
+    - "Unconstrained macro-gap temporal estimation matches the best full-slice split but fails on chronological folds; a 4h macro-gap floor improves holdout robustness."
+  evidence_gaps:
+    - "Need reproducible multi-seed weakly supervised comparisons across primary and AIT-ADS."
+    - "Need ablations separating triage quality from clustering quality."
+    - "Need stronger evidence that heterogeneous edges help more than homogeneous alert-alert projections."
+
+hypotheses:
+  - id: H1
+    statement: "Weakly supervised incident discovery underperforms mainly because post-classification clustering is too coarse, not because alert embeddings are unusable."
+    status: active
+    motivation: "AIT-ADS weakly supervised methods show near-perfect node metrics but poor cluster precision."
+    parent: null
+    priority: high
+  - id: H2
+    statement: "Heterogeneous alert-entity message passing should outperform homogeneous alert-alert baselines once clustering is better calibrated."
+    status: pending
+    motivation: "HGAT should have an inductive advantage if entity structure is being used rather than collapsed away."
+    parent: null
+    priority: high
+  - id: H3
+    statement: "The current primary-dataset instability is driven by thresholding, random split sensitivity, or training variance rather than a fundamental lack of signal."
+    status: active
+    motivation: "Standalone HGAT and comparison-run HGAT results disagree materially on the same dataset family."
+    parent: null
+    priority: medium
+  - id: H4
+    statement: "Incident-scale temporal gaps can be estimated from weakly selected alert streams by ignoring telemetry micro-bursts and detecting macro-gap elbows, but the minimum macro-gap floor must be robustly chosen."
+    status: active
+    motivation: "On AIT-ADS, unconstrained macro-elbow matches full-slice 4h but fails on chronological folds; macro_elbow_floor4 improves mean holdout F1 to 0.9588."
+    parent: H1
+    priority: high
+
+experiments:
+  proxy_metric: "AIT-ADS cluster_f1 for weakly supervised methods (higher is better)"
+  baseline_value: 0.4045881126173097
+  best_value: 0.9362515081939318
+  total_runs: 11
+  trajectory:
+    - run_id: "bootstrap_existing_hgat_ait_ads"
+      hypothesis: "H1"
+      metric_value: 0.4045881126173097
+      delta: "+0.0000"
+      wall_time_min: null
+      change_summary: "Existing full-run HGAT artifact on AIT-ADS."
+      timestamp: "2026-06-29"
+    - run_id: "bootstrap_existing_graphweaver_ait_ads"
+      hypothesis: "reference"
+      metric_value: 0.6532870881008286
+      delta: "+0.2487 vs HGAT"
+      wall_time_min: null
+      change_summary: "Existing rule-based GraphWeaver reference on AIT-ADS."
+      timestamp: "2026-06-29"
+    - run_id: "bootstrap_existing_grain_ait_ads"
+      hypothesis: "reference"
+      metric_value: 0.8867470771507416
+      delta: "+0.4822 vs HGAT"
+      wall_time_min: null
+      change_summary: "Existing incident-supervised GRAIN-style upper bound on AIT-ADS."
+      timestamp: "2026-06-29"
+    - run_id: "all_variants_temporal_causal_hgat"
+      hypothesis: "H1"
+      metric_value: 0.40885142255005263
+      delta: "+0.0043 vs saved HGAT"
+      wall_time_min: null
+      change_summary: "Best first-pass HGAT-family research variant before clustering-policy ablations."
+      timestamp: "2026-06-29"
+    - run_id: "v2_multiview_hgat"
+      hypothesis: "H1"
+      metric_value: 0.4069734209774221
+      delta: "+0.0024 vs saved HGAT"
+      wall_time_min: null
+      change_summary: "Improved multiview fusion/regularization, still collapsed under current DBSCAN."
+      timestamp: "2026-06-29"
+    - run_id: "cluster_ablation_multiview_time_6h"
+      hypothesis: "H1"
+      metric_value: 0.8841772323019299
+      delta: "+0.4796 vs saved HGAT"
+      wall_time_min: null
+      change_summary: "Temporal split of the giant multiview cluster; first fair result matching the supervised GRAIN-style reference."
+      timestamp: "2026-06-29"
+    - run_id: "cluster_ablation_bayesian_blocks"
+      hypothesis: "new_approach"
+      metric_value: 0.019527400829246026
+      delta: "-0.8646 vs multiview time 6h"
+      wall_time_min: null
+      change_summary: "Raw Bayesian-block event segmentation over-fragmented incidents into micro-clusters; useful negative result."
+      timestamp: "2026-06-29"
+    - run_id: "cluster_ablation_multiview_temporal_only_4h"
+      hypothesis: "H1"
+      metric_value: 0.9362515081939318
+      delta: "+0.5317 vs saved HGAT"
+      wall_time_min: null
+      change_summary: "Best fair AIT-ADS result: multiview HGAT triage plus 4h temporal episode segmentation, matching DBSCAN+4h without using semantic metadata."
+      timestamp: "2026-06-29"
+    - run_id: "cluster_ablation_multiview_macro_elbow"
+      hypothesis: "H4"
+      metric_value: 0.9362515081939318
+      delta: "+0.0000 vs fixed 4h"
+      wall_time_min: null
+      change_summary: "Weak-label-only macro-gap estimator recovered the best multiview temporal episode split without incident labels or semantic metadata."
+      timestamp: "2026-06-29"
+    - run_id: "temporal_holdout_multiview_macro_elbow"
+      hypothesis: "H4"
+      metric_value: 0.7691557651052902
+      delta: "-0.1823 vs fixed 4h holdout mean"
+      wall_time_min: null
+      change_summary: "Chronological 4-fold validation showed unconstrained macro-elbow over-fragments late windows despite matching the full-slice result."
+      timestamp: "2026-06-29"
+    - run_id: "temporal_holdout_multiview_macro_elbow_floor4"
+      hypothesis: "H4"
+      metric_value: 0.9587508393029176
+      delta: "+0.0073 vs fixed 4h holdout mean"
+      wall_time_min: null
+      change_summary: "Robust macro-elbow with a 4h macro-gap floor achieved the best chronological holdout mean F1 while preserving full-slice F1 0.9363."
+      timestamp: "2026-06-29"
+
+outer_loop:
+  cycle: 2
+  last_direction: "deepen"
+  last_reflection: "Best current result is multiview HGAT triage plus temporal episode segmentation. Chronological holdout favors a robust 4h macro-gap floor; next step is to infer or externally validate that floor."
+
+workspace:
+  findings: "findings.md"
+  log: "research-log.md"
+  literature_dir: "literature/"
+  experiments_dir: "experiments/"
+  to_human_dir: "to_human/"
+  paper_dir: "paper/"

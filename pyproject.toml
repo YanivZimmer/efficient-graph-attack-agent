@@ -40,8 +40,8 @@ gnn = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
 py-modules = ["gnn_entry"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["benchmarks*", "clustering*", "data*", "evaluation*", "models*", "training*"]

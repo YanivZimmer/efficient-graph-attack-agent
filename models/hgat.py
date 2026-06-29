@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+from torch.nn.functional import normalize
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import HGTConv, Linear
 
@@ -17,6 +18,7 @@ class HeterogeneousGAT(nn.Module):
         alert_in_channels: int,
         hidden_channels: int = 128,
         out_channels: int = 64,
+        projection_dim: int = 32,
         entity_counts: dict[str, int] | None = None,
         heads: int = 2,
         dropout: float = 0.3,
@@ -49,6 +51,7 @@ class HeterogeneousGAT(nn.Module):
             metadata=metadata,
             heads=heads,
         )
+        self.projection = Linear(out_channels, projection_dim)
         self.classifier = Linear(out_channels, 1)
 
     def _initial_node_features(self, data: HeteroData) -> dict[str, torch.Tensor]:
@@ -68,11 +71,26 @@ class HeterogeneousGAT(nn.Module):
         x_dict = self._initial_node_features(data)
         x_dict = self.conv1(x_dict, data.edge_index_dict)
         x_dict = {node_type: torch.relu(features) for node_type, features in x_dict.items()}
-        x_dict = {node_type: nn.functional.dropout(features, p=self.dropout, training=self.training) for node_type, features in x_dict.items()}
+        x_dict = {
+            node_type: nn.functional.dropout(features, p=self.dropout, training=self.training)
+            for node_type, features in x_dict.items()
+        }
         x_dict = self.conv2(x_dict, data.edge_index_dict)
         return x_dict["alert"]
+
+    def classify_embeddings(self, embeddings: torch.Tensor) -> torch.Tensor:
+        """Return alert logits from precomputed alert embeddings."""
+        return self.classifier(embeddings).squeeze(-1)
+
+    def project_embeddings(self, embeddings: torch.Tensor) -> torch.Tensor:
+        """Return normalized projected alert embeddings for metric learning."""
+        return normalize(self.projection(embeddings), dim=-1)
+
+    def project(self, data: HeteroData) -> torch.Tensor:
+        """Encode and project alerts into the metric-learning space."""
+        return self.project_embeddings(self.encode(data))
 
     def forward(self, data: HeteroData) -> torch.Tensor:
         """Return alert logits for binary classification."""
         embeddings = self.encode(data)
-        return self.classifier(embeddings).squeeze(-1)
+        return self.classify_embeddings(embeddings)
